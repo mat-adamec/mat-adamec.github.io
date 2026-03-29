@@ -13,65 +13,55 @@
     return await resp.json();
   }
 
-  function luaAstToJs(node) {
-    if (!node) return null;
+function luaAstToJs(node) {
+  if (!node) return null;
 
-    switch (node.type) {
-      case "StringLiteral": return node.value;
-      case "NumericLiteral": return node.value;
-      case "BooleanLiteral": return node.value;
-      case "NilLiteral": return null;
+  switch (node.type) {
+    case "StringLiteral": return node.value;
+    case "NumericLiteral": return node.value;
+    case "BooleanLiteral": return node.value;
+    case "NilLiteral": return null;
 
-case "TableConstructorExpression": {
-  const obj = {};
-  let arrayIndex = 1;
+    case "TableConstructorExpression": {
+      const obj = {};
+      let arrayIndex = 1;
 
-case "TableConstructorExpression": {
-  const obj = {};
-  let arrayIndex = 1;
+      for (const field of node.fields) {
 
-  for (const field of node.fields) {
+        // foo = {...}
+        if (field.type === "TableKeyString") {
+          obj[field.key.name] = luaAstToJs(field.value);
+          continue;
+        }
 
-    // foo = {...}
-    if (field.type === "TableKeyString") {
-      obj[field.key.name] = luaAstToJs(field.value);
-      continue;
-    }
+        // ["foo"] = {...}   OR   [123] = {...}
+        if (field.type === "TableKey") {
+          let key = null;
 
-    // ["foo"] = {...}   OR   [123] = {...}
-    if (field.type === "TableKey") {
-      let key;
+          if (field.key.type === "StringLiteral") key = field.key.value;
+          else if (field.key.type === "NumericLiteral") key = String(field.key.value);
+          else key = String(luaAstToJs(field.key));
 
-      if (field.key.type === "StringLiteral") {
-        key = field.key.value;
-      } else if (field.key.type === "NumericLiteral") {
-        key = String(field.key.value);
-      } else {
-        // fallback
-        key = String(luaAstToJs(field.key));
+          obj[key] = luaAstToJs(field.value);
+          continue;
+        }
+
+        // { "a", "b", "c" }
+        if (field.type === "TableValue") {
+          obj[String(arrayIndex)] = luaAstToJs(field.value);
+          arrayIndex++;
+          continue;
+        }
       }
 
-      obj[key] = luaAstToJs(field.value);
-      continue;
+      return obj;
     }
 
-    // { "a", "b", "c" }
-    if (field.type === "TableValue") {
-      obj[String(arrayIndex)] = luaAstToJs(field.value);
-      arrayIndex++;
-      continue;
-    }
+    default:
+      console.warn("Unhandled AST node type:", node.type);
+      return null;
   }
-
-  return obj;
 }
-
-  return obj;
-}
-
-      default:
-        return null;
-    }
   }
 
   function extractGlobalsFromLua(luaText) {
