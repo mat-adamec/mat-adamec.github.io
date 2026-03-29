@@ -24,7 +24,7 @@ function luaAstToJs(node) {
 
   switch (node.type) {
     case "StringLiteral":
-      return node.raw.slice(1, -1); // fix: strip quotes from raw
+      return node.raw.slice(1, -1); // fix: use raw instead of value
     case "NumericLiteral": return node.value;
     case "BooleanLiteral": return node.value;
     case "NilLiteral": return null;
@@ -33,19 +33,24 @@ function luaAstToJs(node) {
       const obj = {};
       let arrayIndex = 1;
       for (const field of node.fields) {
+
         if (field.type === "TableKeyString") {
           obj[field.key.name] = luaAstToJs(field.value);
+
         } else if (field.type === "TableKey") {
+          // key could be StringLiteral or NumericLiteral
           let key;
           if (field.key.type === "StringLiteral") key = field.key.raw.slice(1, -1);
           else if (field.key.type === "NumericLiteral") key = String(field.key.value);
           else key = String(luaAstToJs(field.key));
 
           obj[key] = luaAstToJs(field.value);
+
         } else if (field.type === "TableValue") {
           obj[String(arrayIndex)] = luaAstToJs(field.value);
           arrayIndex++;
         }
+
       }
       return obj;
     }
