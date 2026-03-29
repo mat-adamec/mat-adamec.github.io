@@ -22,22 +22,45 @@
       case "BooleanLiteral": return node.value;
       case "NilLiteral": return null;
 
-      case "TableConstructorExpression": {
-        const obj = {};
-        let arrayIndex = 1;
+case "TableConstructorExpression": {
+  const obj = {};
+  let arrayIndex = 1;
 
-        for (const field of node.fields) {
-          if (field.type === "TableKeyString") {
-            obj[field.key.name] = luaAstToJs(field.value);
-          } else if (field.type === "TableKey") {
-            obj[luaAstToJs(field.key)] = luaAstToJs(field.value);
-          } else if (field.type === "TableValue") {
-            obj[arrayIndex] = luaAstToJs(field.value);
-            arrayIndex++;
-          }
-        }
-        return obj;
+  for (const field of node.fields) {
+
+    // foo = "bar"
+    if (field.type === "TableKeyString") {
+      obj[field.key.name] = luaAstToJs(field.value);
+      continue;
+    }
+
+    // ["foo"] = "bar"  OR  [123] = "bar"
+    if (field.type === "TableKey") {
+      const keyNode = field.key;
+      let key;
+
+      if (keyNode.type === "StringLiteral") {
+        key = keyNode.value;
+      } else if (keyNode.type === "NumericLiteral") {
+        key = String(keyNode.value);
+      } else {
+        key = String(luaAstToJs(keyNode));
       }
+
+      obj[key] = luaAstToJs(field.value);
+      continue;
+    }
+
+    // {"a","b","c"} style
+    if (field.type === "TableValue") {
+      obj[String(arrayIndex)] = luaAstToJs(field.value);
+      arrayIndex++;
+      continue;
+    }
+  }
+
+  return obj;
+}
 
       default:
         return null;
