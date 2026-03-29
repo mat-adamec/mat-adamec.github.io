@@ -1,90 +1,185 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>TRP3 Lua → HTML Formatter</title>
-  <style>
-    body { font-family: sans-serif; margin: 2rem; max-width: 800px; }
-    h1 { font-size: 1.8rem; }
-    input, button, textarea { margin: 0.5rem 0; }
-    textarea { width: 100%; height: 250px; }
-    #outputPreview { border: 1px solid #ccc; padding: 1rem; background: #f9f9f9; margin-top: 1rem; }
-  </style>
-</head>
-<body>
-  <h1>TRP3 Lua → HTML Formatter</h1>
+<input type="file" id="trp3File" accept=".lua">
+<input type="text" id="charName" placeholder="Terawyne-MoonGuard">
+<button id="parseBtn">Parse</button>
 
-  <p>Select a TRP3 `.lua` file to convert to HTML:</p>
-  <input type="file" id="luaFile" accept=".lua"><br>
-  <button onclick="convertLua()" id="convertBtn" disabled>Convert to HTML</button>
-  <button onclick="downloadHTML()" id="downloadBtn" disabled>Download HTML</button>
+<pre id="output"></pre>
 
-  <h2>HTML Output Preview</h2>
-  <div id="outputPreview"></div>
+<script type="module">
+  import luaparse from "https://cdn.jsdelivr.net/npm/luaparse@0.3.1/+esm";
 
-  <textarea id="outputText" readonly placeholder="Converted HTML will appear here..." style="display:none;"></textarea>
+  async function loadJSON(url) {
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error("Failed to load " + url);
+    return await resp.json();
+  }
 
-  <!-- Pyodide -->
-  <script src="https://cdn.jsdelivr.net/pyodide/v0.23.4/full/pyodide.js"></script>
-  <script>
-    let pyodide = null;
-    let htmlResult = "";
+  function luaAstToJs(node) {
+    if (!node) return null;
 
-    // Load Pyodide on page load
-    async function initPyodide() {
-      pyodide = await loadPyodide();
-      console.log("Pyodide loaded.");
+    switch (node.type) {
+      case "StringLiteral": return node.value;
+      case "NumericLiteral": return node.value;
+      case "BooleanLiteral": return node.value;
+      case "NilLiteral": return null;
 
-      // Enable convert button after Pyodide is ready
-      document.getElementById("convertBtn").disabled = false;
+      case "TableConstructorExpression": {
+        const obj = {};
+        let arrayIndex = 1;
+
+        for (const field of node.fields) {
+          if (field.type === "TableKeyString") {
+            obj[field.key.name] = luaAstToJs(field.value);
+          } else if (field.type === "TableKey") {
+            obj[luaAstToJs(field.key)] = luaAstToJs(field.value);
+          } else if (field.type === "TableValue") {
+            obj[arrayIndex] = luaAstToJs(field.value);
+            arrayIndex++;
+          }
+        }
+        return obj;
+      }
+
+      default:
+        return null;
+    }
+  }
+
+  function extractGlobalsFromLua(luaText) {
+    const ast = luaparse.parse(luaText);
+
+    const globals = {};
+    for (const stmt of ast.body) {
+      if (stmt.type !== "AssignmentStatement") continue;
+
+      for (let i = 0; i < stmt.variables.length; i++) {
+        const variable = stmt.variables[i];
+        const initValue = stmt.init[i];
+
+        if (!variable || variable.type !== "Identifier") continue;
+
+        const name = variable.name;
+        if (name === "TRP3_Characters" || name === "TRP3_Profiles" || name === "TRP3_Companions") {
+          globals[name] = luaAstToJs(initValue);
+        }
+      }
+    }
+    return globals;
+  }
+
+  const relationship_status = ["NA", "Single", "Taken", "Married", "Divorced", "Widowed"];
+
+  function parseIcon(name, baseUrl, lookup) {
+    const iconName = lookup[name];
+    return iconName ? `${baseUrl}/ICONS/${iconName}` : null;
+  }
+
+  function formatCharacteristics(characteristics, iconLookup, imageBaseUrl) {
+    const jdict = { basic: {}, additional: {}, top: {}, sliders: [] };
+
+    for (const [key, value] of Object.entries(characteristics)) {
+      switch (key) {
+        case "FN": jdict.top["First Name"] = value; break;
+        case "FT": jdict.top["Full Title"] = value; break;
+        case "LN": jdict.top["Last Name"] = value; break;
+        case "IC": jdict.top["Class Icon"] = parseIcon(value, imageBaseUrl, iconLookup); break;
+
+        case "RA": jdict.basic["Race"] = value; break;
+        case "CL": jdict.basic["Class Name"] = { value, color: characteristics["CH"] }; break;
+        case "CH": break;
+
+        case "AG": jdict.basic["Age"] = value; break;
+        case "EC": jdict.basic["Eye Color"] = { value, color: characteristics["EH"] }; break;
+        case "EH": break;
+
+        case "HE": jdict.basic["Height"] = value; break;
+        case "WE": jdict.basic["Body Shape"] = value; break;
+        case "BP": jdict.basic["Birthplace"] = value; break;
+        case "RE": jdict.basic["Residence"] = value; break;
+
+        case "RS":
+          jdict.basic["Relationship Status"] = relationship_status[value] ?? value;
+          break;
+
+        case "MI":
+          Object.values(value).forEach(custom => {
+            jdict.additional[custom.NA] = {
+              value: custom.VA,
+              icon: parseIcon(custom.IC, imageBaseUrl, iconLookup)
+            };
+          });
+          break;
+
+        case "PS":
+          Object.values(value).forEach(slider => {
+            jdict.sliders.push([
+              { value: slider.LT, icon: slider.LI, color: slider.LC },
+              slider.V2,
+              { value: slider.RT, icon: slider.RI, color: slider.RC }
+            ]);
+          });
+          break;
+
+        default:
+          break;
+      }
     }
 
-    initPyodide();
+    return jdict;
+  }
 
-    async function convertLua() {
-      const fileInput = document.getElementById("luaFile");
-      const file = fileInput.files[0];
-      if (!file) return alert("Please select a LUA file.");
+  async function parseTRP3(luaText, characterName) {
+    const iconLookup = await loadJSON("./icon_map.json");
+    const imageBaseUrl = "https://raw.githubusercontent.com/keyboardturner/wow-ui-art/retail_png";
 
-      const luaText = await file.text();
+    const globals = extractGlobalsFromLua(luaText);
 
-      // Load trp3_dump.py
-      const pyCode = await fetch("trp3_dump.py").then(r => r.text());
-      pyodide.runPython(pyCode);
+    const characters = globals.TRP3_Characters;
+    const profiles = globals.TRP3_Profiles;
 
-      // Write the uploaded file to Pyodide's virtual filesystem
-      pyodide.FS.writeFile("input.lua", luaText);
+    if (!characters) throw new Error("TRP3_Characters not found.");
+    if (!profiles) throw new Error("TRP3_Profiles not found.");
 
-      // Run your lua_to_html function from Python
-      htmlResult = pyodide.runPython(`
-with open("input.lua") as f:
-    lua_text = f.read()
-result = get_characteristics()
-result
-`);
+    const charData = characters[characterName];
+    if (!charData) throw new Error("Character not found: " + characterName);
 
-      // Show the result
-      document.getElementById("outputPreview").innerHTML = htmlResult;
-      const outputTextArea = document.getElementById("outputText");
-      outputTextArea.value = htmlResult;
-      outputTextArea.style.display = "block";
+    const character_id = charData.profileID;
 
-      // Enable download
-      document.getElementById("downloadBtn").disabled = false;
+    const profile = profiles[character_id]?.player;
+    if (!profile) throw new Error("Profile not found: " + character_id);
+
+    const formatted = formatCharacteristics(profile.characteristics, iconLookup, imageBaseUrl);
+
+    return {
+      character_name: characterName,
+      character_id,
+      about: profile.about,
+      glance: profile.misc?.PE,
+      formatted_characteristics: formatted
+    };
+  }
+
+  document.getElementById("parseBtn").addEventListener("click", async () => {
+    const fileInput = document.getElementById("trp3File");
+    const characterName = document.getElementById("charName").value.trim();
+    const outputBox = document.getElementById("output");
+
+    if (!fileInput.files.length) {
+      outputBox.textContent = "Upload totalRP3.lua first.";
+      return;
+    }
+    if (!characterName) {
+      outputBox.textContent = "Enter character name (Name-Realm).";
+      return;
     }
 
-    function downloadHTML() {
-      if (!htmlResult) return;
-      const blob = new Blob([htmlResult], { type: "text/html" });
-      const url = URL.createObjectURL(blob);
+    const file = fileInput.files[0];
+    const luaText = await file.text();
 
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "formatted.html";
-      a.click();
-
-      URL.revokeObjectURL(url);
+    try {
+      const parsed = await parseTRP3(luaText, characterName);
+      outputBox.textContent = JSON.stringify(parsed, null, 2);
+    } catch (err) {
+      outputBox.textContent = "ERROR: " + err.message;
     }
-  </script>
-</body>
-</html>
+  });
+</script>
