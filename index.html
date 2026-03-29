@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>TRP3 Lua → HTML Formatter</title>
+  <style>
+    body { font-family: sans-serif; margin: 2rem; }
+    input, button { margin: 0.5rem 0; }
+    textarea { width: 100%; height: 200px; margin: 0.5rem 0; }
+  </style>
+</head>
+<body>
+
+<h1>TRP3 Lua → HTML Formatter</h1>
+
+<!-- File upload -->
+<input type="file" id="fileInput" accept=".lua">
+<br>
+
+<!-- Convert button -->
+<button onclick="convertFile()">Convert to HTML</button>
+<br>
+
+<!-- Display output -->
+<h2>HTML Output Preview</h2>
+<textarea id="output" readonly></textarea>
+<br>
+
+<!-- Download button -->
+<button id="downloadBtn" onclick="downloadHTML()" disabled>Download HTML</button>
+
+<script>
+// Your Lua → HTML formatter function
+function luaToHtml(luaText) {
+    // Replace this with your actual formatter logic
+    return `<pre>${luaText.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>`;
+}
+
+// Read file and convert
+function convertFile() {
+    const file = document.getElementById('fileInput').files[0];
+    if (!file) return alert("Please select a LUA file.");
+    
+    const reader = new FileReader();
+    reader.onload = () => {
+        const html = luaToHtml(reader.result);
+        document.getElementById('output').value = html;
+        document.getElementById('downloadBtn').disabled = false;
+    };
+    reader.readAsText(file);
+}
+
+// Download the result as a file
+function downloadHTML() {
+    const htmlContent = document.getElementById('output').value;
+    const blob = new Blob([htmlContent], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = "formatted.html";
+    a.click();
+    
+    URL.revokeObjectURL(url);
+}
+</script>
+
+</body>
+</html>
