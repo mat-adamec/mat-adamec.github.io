@@ -1,0 +1,84 @@
+body {
+    background-image: url('https://raw.githubusercontent.com/keyboardturner/wow-ui-art/retail_png/DialogFrame/UI-DialogBox-Background-Dark.png');
+    background-repeat: no-repeat;
+    background_attachment: fixed;
+    background-size:100% 100%;
+    color: white;
+}
+
+span.fixed-color a:link,
+span.fixed-color a:visited,
+span.fixed-color a:hover,
+span.fixed-color a:active {
+    color: inherit !important; 
+    text-decoration: none;
+}
+
+.info-box {
+    display: flex;
+    flex-direction: column;
+    max-width: 50%;
+    margin-left: 50%;
+    transform: translateX(-50%);
+}
+
+.info-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    padding-bottom: 20px;
+}
+
+.info-left, .info-right {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+}
+
+.info-left {
+    width: 35%
+}
+
+.info-right {
+    width: 65%
+}
+
+.icon, .color-box {
+    flex: 0 0 auto;
+    display: inline-flex;
+}
+
+.icon {
+    width: 42px;
+    height: 42px;
+}
+.color-box {
+    width: 16px;
+    height: 16px;
+    margin-right: 5px;
+}
+
+.slider-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    padding-bottom: 20px;
+}
+
+.slider {
+    display: inline-block;
+    position: relative;
+    width: 400px;
+    height: 20px;
+    margin: 40px;
+    border-radius: 10px;
+
+    /* gradient directly */
+    background-image: linear-gradient(
+        to right,
+        var(--left-color) 0%,
+        var(--left-color) calc(var(--filled) / var(--ticks) * 100%),
+        var(--right-color) calc(var(--filled) / var(--ticks) * 100%),
+        var(--right-color) 100%
+    );
+}
