@@ -6,6 +6,12 @@
 
 <script type="module">
   import luaparse from "https://cdn.jsdelivr.net/npm/luaparse@0.3.1/+esm";
+  const luaText = `TRP3_Characters = { ["Terawyne-MoonGuard"] = { ["profileID"] = "12312007362AjzR" } }`;
+
+  const ast = luaparse.parse(luaText, { luaVersion: '5.1' });
+  console.log("AST:", ast);
+  console.log("AST body first statement:", ast.body[0]);
+</script>
 
   async function loadJSON(url) {
     const resp = await fetch(url);
