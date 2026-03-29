@@ -23,7 +23,8 @@ function luaAstToJs(node) {
   if (!node) return null;
 
   switch (node.type) {
-    case "StringLiteral": return node.value;
+    case "StringLiteral":
+      return node.raw.slice(1, -1); // fix: strip quotes from raw
     case "NumericLiteral": return node.value;
     case "BooleanLiteral": return node.value;
     case "NilLiteral": return null;
@@ -31,35 +32,21 @@ function luaAstToJs(node) {
     case "TableConstructorExpression": {
       const obj = {};
       let arrayIndex = 1;
-
       for (const field of node.fields) {
-
-        // foo = {...}
         if (field.type === "TableKeyString") {
           obj[field.key.name] = luaAstToJs(field.value);
-          continue;
-        }
-
-        // ["foo"] = {...}   OR   [123] = {...}
-        if (field.type === "TableKey") {
-          let key = null;
-
-          if (field.key.type === "StringLiteral") key = field.key.value;
+        } else if (field.type === "TableKey") {
+          let key;
+          if (field.key.type === "StringLiteral") key = field.key.raw.slice(1, -1);
           else if (field.key.type === "NumericLiteral") key = String(field.key.value);
           else key = String(luaAstToJs(field.key));
 
           obj[key] = luaAstToJs(field.value);
-          continue;
-        }
-
-        // { "a", "b", "c" }
-        if (field.type === "TableValue") {
+        } else if (field.type === "TableValue") {
           obj[String(arrayIndex)] = luaAstToJs(field.value);
           arrayIndex++;
-          continue;
         }
       }
-
       return obj;
     }
 
